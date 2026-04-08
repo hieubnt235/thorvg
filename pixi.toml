@@ -1,0 +1,10 @@
+[workspace]
+authors = ["HieuBNT <hieu.buinguyen2352001@gmail.com>"]
+channels = ["conda-forge"]
+name = "thorvg"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
