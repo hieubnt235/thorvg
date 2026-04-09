@@ -1,0 +1,1 @@
+/usr/bin/c++ -Wl,--dependency-file=CMakeFiles/lottie2gif.dir/link.d CMakeFiles/lottie2gif.dir/tools/lottie2gif/lottie2gif.cpp.o -o lottie2gif  libthorvg-1.a /usr/lib/x86_64-linux-gnu/libpthread.a

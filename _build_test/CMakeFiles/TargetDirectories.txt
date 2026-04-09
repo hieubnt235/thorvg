@@ -1,0 +1,9 @@
+/home/hieu/Workspaces/projects/thorvg/_build_test/CMakeFiles/thorvg-1.dir
+/home/hieu/Workspaces/projects/thorvg/_build_test/CMakeFiles/svg2png.dir
+/home/hieu/Workspaces/projects/thorvg/_build_test/CMakeFiles/lottie2gif.dir
+/home/hieu/Workspaces/projects/thorvg/_build_test/CMakeFiles/edit_cache.dir
+/home/hieu/Workspaces/projects/thorvg/_build_test/CMakeFiles/rebuild_cache.dir
+/home/hieu/Workspaces/projects/thorvg/_build_test/CMakeFiles/list_install_components.dir
+/home/hieu/Workspaces/projects/thorvg/_build_test/CMakeFiles/install.dir
+/home/hieu/Workspaces/projects/thorvg/_build_test/CMakeFiles/install/local.dir
+/home/hieu/Workspaces/projects/thorvg/_build_test/CMakeFiles/install/strip.dir

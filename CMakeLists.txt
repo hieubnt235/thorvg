@@ -24,9 +24,34 @@ option(THORVG_TESTS "Enable building unit tests" OFF)
 option(THORVG_LOG "Enable log message" OFF)
 option(THORVG_STATIC "Force static linking" OFF)
 option(THORVG_FILE_IO "Enable File IO calls" ON)
-option(THORVG_EXTRA_LOTTIE_EXP "Enable Lottie expressions" ON)
+option(THORVG_EXTRA_LOTTIE_EXP "Enable Lottie expressions" OFF)
+if (THORVG_EXTRA_LOTTIE_EXP)
+    message(WARNING "Lottie expressions require JerryScript library. Not yet fully supported in CMake build.")
+endif()
 option(THORVG_EXTRA_OPENMP "Enable OpenMP support" ON)
 option(THORVG_EXTRA_OPENGL_ES "Use OpenGL ES variant" OFF)
+
+# Set config.h variables based on options (default OFF)
+set(THORVG_CPU_ENGINE_SUPPORT OFF)
+set(THORVG_GL_ENGINE_SUPPORT OFF)
+set(THORVG_WG_ENGINE_SUPPORT OFF)
+set(THORVG_PARTIAL_RENDER_SUPPORT OFF)
+set(THORVG_SVG_LOADER_SUPPORT OFF)
+set(THORVG_PNG_LOADER_SUPPORT OFF)
+set(THORVG_JPG_LOADER_SUPPORT OFF)
+set(THORVG_LOTTIE_LOADER_SUPPORT OFF)
+set(THORVG_TTF_LOADER_SUPPORT OFF)
+set(THORVG_WEBP_LOADER_SUPPORT OFF)
+set(THORVG_GIF_SAVER_SUPPORT OFF)
+set(THORVG_THREAD_SUPPORT OFF)
+set(THORVG_LOG_ENABLED OFF)
+set(THORVG_FILE_IO_SUPPORT OFF)
+set(THORVG_CAPI_BINDING_SUPPORT OFF)
+set(THORVG_LOTTIE_EXPRESSIONS_SUPPORT OFF)
+set(THORVG_OPENMP_SUPPORT OFF)
+set(THORVG_AVX_VECTOR_SUPPORT OFF)
+set(THORVG_NEON_VECTOR_SUPPORT OFF)
+set(WIN32_LEAN_AND_MEAN ON)
 
 # Define engine selection: if any engine is ON, we enable engines
 set(THORVG_ENGINES_SUPPORT OFF)
@@ -50,69 +75,78 @@ if (THORVG_SIMD)
     endif()
 endif()
 
-# Collect configuration definitions for config.h
-set(THORVG_CONFIG_DEFINES)
+# Handle dependencies between options (mirroring meson logic)
+# Tools require corresponding loaders/savers
+if (THORVG_TOOLS_LOTTIE2GIF)
+    # lottie2gif requires GIF saver and Lottie loader
+    set(THORVG_SAVERS_GIF ON)
+    if (NOT THORVG_LOADERS_LOTTIE)
+        message(STATUS "Enabling Lottie loader (required by lottie2gif tool)")
+        set(THORVG_LOADERS_LOTTIE ON)
+    endif()
+endif()
+if (THORVG_TOOLS_SVG2PNG AND NOT THORVG_LOADERS_SVG)
+    message(STATUS "Enabling SVG loader (required by svg2png tool)")
+    set(THORVG_LOADERS_SVG ON)
+endif()
+# Lottie expressions require Lottie loader
+if (THORVG_EXTRA_LOTTIE_EXP AND NOT THORVG_LOADERS_LOTTIE)
+    message(WARNING "Disabling Lottie expressions (requires Lottie loader)")
+    set(THORVG_EXTRA_LOTTIE_EXP OFF)
+endif()
 
+# Set config.h variables based on options (enable where appropriate)
 if (THORVG_ENGINES_CPU)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_CPU_ENGINE_SUPPORT)
+    set(THORVG_CPU_ENGINE_SUPPORT ON)
 endif()
 if (THORVG_ENGINES_GL)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_GL_ENGINE_SUPPORT)
+    set(THORVG_GL_ENGINE_SUPPORT ON)
 endif()
 if (THORVG_ENGINES_WG)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_WG_ENGINE_SUPPORT)
+    set(THORVG_WG_ENGINE_SUPPORT ON)
 endif()
 if (THORVG_PARTIAL_RENDER)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_PARTIAL_RENDER_SUPPORT)
+    set(THORVG_PARTIAL_RENDER_SUPPORT ON)
 endif()
 if (THORVG_LOADERS_SVG)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_SVG_LOADER_SUPPORT)
+    set(THORVG_SVG_LOADER_SUPPORT ON)
 endif()
 if (THORVG_LOADERS_PNG)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_PNG_LOADER_SUPPORT)
+    set(THORVG_PNG_LOADER_SUPPORT ON)
 endif()
 if (THORVG_LOADERS_JPG)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_JPG_LOADER_SUPPORT)
+    set(THORVG_JPG_LOADER_SUPPORT ON)
 endif()
 if (THORVG_LOADERS_LOTTIE)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_LOTTIE_LOADER_SUPPORT)
+    set(THORVG_LOTTIE_LOADER_SUPPORT ON)
 endif()
 if (THORVG_LOADERS_TTF)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_TTF_LOADER_SUPPORT)
+    set(THORVG_TTF_LOADER_SUPPORT ON)
 endif()
 if (THORVG_LOADERS_WEBP)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_WEBP_LOADER_SUPPORT)
+    set(THORVG_WEBP_LOADER_SUPPORT ON)
 endif()
 if (THORVG_SAVERS_GIF)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_GIF_SAVER_SUPPORT)
+    set(THORVG_GIF_SAVER_SUPPORT ON)
 endif()
 if (THORVG_THREADS)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_THREAD_SUPPORT)
+    set(THORVG_THREAD_SUPPORT ON)
 endif()
 if (THORVG_LOG)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_LOG_ENABLED)
+    set(THORVG_LOG_ENABLED ON)
 endif()
 if (THORVG_FILE_IO)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_FILE_IO_SUPPORT)
+    set(THORVG_FILE_IO_SUPPORT ON)
 endif()
 if (THORVG_BINDINGS_CAPI)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_CAPI_BINDING_SUPPORT)
+    set(THORVG_CAPI_BINDING_SUPPORT ON)
 endif()
 if (THORVG_EXTRA_LOTTIE_EXP)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_LOTTIE_EXPRESSIONS_SUPPORT)
+    set(THORVG_LOTTIE_EXPRESSIONS_SUPPORT ON)
 endif()
 if (THORVG_EXTRA_OPENMP)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_OPENMP_SUPPORT)
+    set(THORVG_OPENMP_SUPPORT ON)
 endif()
-if (THORVG_AVX_VECTOR_SUPPORT)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_AVX_VECTOR_SUPPORT)
-endif()
-if (THORVG_NEON_VECTOR_SUPPORT)
-    list(APPEND THORVG_CONFIG_DEFINES THORVG_NEON_VECTOR_SUPPORT)
-endif()
-
-# Always define WIN32_LEAN_AND_MEAN for Windows
-list(APPEND THORVG_CONFIG_DEFINES WIN32_LEAN_AND_MEAN)
 
 # Generate config.h
 configure_file(
@@ -232,6 +266,54 @@ if (THORVG_ENGINES_CPU)
     )
 endif()
 
+# GPU common source files (if enabled)
+set(GPU_COMMON_SOURCES)
+if (THORVG_ENGINES_GL OR THORVG_ENGINES_WG)
+    set(GPU_COMMON_SOURCES
+        src/renderer/gpu_engine/tvgGpuCommon.cpp
+    )
+endif()
+
+# GL engine source files (if enabled)
+set(GL_ENGINE_SOURCES)
+if (THORVG_ENGINES_GL)
+    set(GL_ENGINE_SOURCES
+        src/renderer/gpu_engine/gl/tvgGl.cpp
+        src/renderer/gpu_engine/gl/tvgGlEffect.cpp
+        src/renderer/gpu_engine/gl/tvgGlGeometry.cpp
+        src/renderer/gpu_engine/gl/tvgGlGpuBuffer.cpp
+        src/renderer/gpu_engine/gl/tvgGlTextureMgr.cpp
+        src/renderer/gpu_engine/gl/tvgGlProgram.cpp
+        src/renderer/gpu_engine/gl/tvgGlRenderer.cpp
+        src/renderer/gpu_engine/gl/tvgGlSolidBatch.cpp
+        src/renderer/gpu_engine/gl/tvgGlRenderPass.cpp
+        src/renderer/gpu_engine/gl/tvgGlRenderTarget.cpp
+        src/renderer/gpu_engine/gl/tvgGlRenderTask.cpp
+        src/renderer/gpu_engine/gl/tvgGlShader.cpp
+        src/renderer/gpu_engine/gl/tvgGlShaderSrc.cpp
+        src/renderer/gpu_engine/gl/tvgGlTessellator.cpp
+    )
+endif()
+
+# WG engine source files (if enabled)
+set(WG_ENGINE_SOURCES)
+if (THORVG_ENGINES_WG)
+    set(WG_ENGINE_SOURCES
+        src/renderer/gpu_engine/wg/tvgWgBindGroups.cpp
+        src/renderer/gpu_engine/wg/tvgWgCommon.cpp
+        src/renderer/gpu_engine/wg/tvgWgCompositor.cpp
+        src/renderer/gpu_engine/wg/tvgWgGeometry.cpp
+        src/renderer/gpu_engine/wg/tvgWgPipelines.cpp
+        src/renderer/gpu_engine/wg/tvgWgRenderData.cpp
+        src/renderer/gpu_engine/wg/tvgWgRenderer.cpp
+        src/renderer/gpu_engine/wg/tvgWgRenderTarget.cpp
+        src/renderer/gpu_engine/wg/tvgWgRenderTask.cpp
+        src/renderer/gpu_engine/wg/tvgWgShaderSrc.cpp
+        src/renderer/gpu_engine/wg/tvgWgShaderTypes.cpp
+        src/renderer/gpu_engine/wg/tvgWgTessellator.cpp
+    )
+endif()
+
 # SVG loader source files (if enabled)
 set(SVG_SOURCES)
 if (THORVG_LOADERS_SVG)
@@ -274,6 +356,7 @@ endif()
 
 # PNG loader source files (if enabled)
 set(PNG_SOURCES)
+set(PNG_INCLUDE_DIR)
 if (THORVG_LOADERS_PNG)
     if (THORVG_STATIC)
         # Use internal lodepng
@@ -281,6 +364,7 @@ if (THORVG_LOADERS_PNG)
             src/loaders/png/tvgLodePng.cpp
             src/loaders/png/tvgPngLoader.cpp
         )
+        set(PNG_INCLUDE_DIR src/loaders/png)
     else()
         # Try to find system libpng
         find_package(PNG)
@@ -289,6 +373,7 @@ if (THORVG_LOADERS_PNG)
             set(PNG_SOURCES
                 src/loaders/external_png/tvgPngLoader.cpp
             )
+            set(PNG_INCLUDE_DIR src/loaders/external_png)
             # Add PNG library dependency
             set(PNG_LIB PNG::PNG)
         else()
@@ -297,6 +382,7 @@ if (THORVG_LOADERS_PNG)
                 src/loaders/png/tvgLodePng.cpp
                 src/loaders/png/tvgPngLoader.cpp
             )
+            set(PNG_INCLUDE_DIR src/loaders/png)
         endif()
     endif()
 endif()
@@ -384,6 +470,9 @@ set(ALL_SOURCES
     ${COMMON_SOURCES}
     ${RENDERER_SOURCES}
     ${CPU_ENGINE_SOURCES}
+    ${GPU_COMMON_SOURCES}
+    ${GL_ENGINE_SOURCES}
+    ${WG_ENGINE_SOURCES}
     ${SVG_SOURCES}
     ${TTF_SOURCES}
     ${LOTTIE_SOURCES}
@@ -423,6 +512,20 @@ if (WEBP_LIB)
     list(APPEND THORVG_LIB_DEPS ${WEBP_LIB})
 endif()
 
+# Add WG engine dependency
+if (THORVG_ENGINES_WG AND NOT EMSCRIPTEN_BUILD)
+    find_library(WGPU_NATIVE_LIB wgpu_native)
+    if (WGPU_NATIVE_LIB)
+        list(APPEND THORVG_LIB_DEPS ${WGPU_NATIVE_LIB})
+    endif()
+endif()
+
+# Add GL engine dependency
+if (THORVG_ENGINES_GL)
+    find_package(OpenGL REQUIRED)
+    list(APPEND THORVG_LIB_DEPS OpenGL::OpenGL)
+endif()
+
 # Create the library
 add_library(thorvg-${PROJECT_VERSION_MAJOR} ${ALL_SOURCES})
 
@@ -448,6 +551,26 @@ if (THORVG_ENGINES_CPU)
     )
 endif()
 
+# Add GPU engine include directories if enabled
+if (THORVG_ENGINES_GL OR THORVG_ENGINES_WG)
+    target_include_directories(thorvg-${PROJECT_VERSION_MAJOR}
+        PRIVATE
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/gpu_engine>
+    )
+endif()
+if (THORVG_ENGINES_GL)
+    target_include_directories(thorvg-${PROJECT_VERSION_MAJOR}
+        PRIVATE
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/gpu_engine/gl>
+    )
+endif()
+if (THORVG_ENGINES_WG)
+    target_include_directories(thorvg-${PROJECT_VERSION_MAJOR}
+        PRIVATE
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/gpu_engine/wg>
+    )
+endif()
+
 # Add loader include directories if enabled
 if (THORVG_LOADERS_SVG)
     target_include_directories(thorvg-${PROJECT_VERSION_MAJOR}
@@ -467,10 +590,16 @@ if (THORVG_LOADERS_LOTTIE)
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/loaders/lottie>
     )
 endif()
-if (THORVG_LOADERS_PNG)
+if (THORVG_EXTRA_LOTTIE_EXP)
     target_include_directories(thorvg-${PROJECT_VERSION_MAJOR}
         PRIVATE
-            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/loaders/png>
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/loaders/lottie/jerryscript/jerry-core/include>
+    )
+endif()
+if (THORVG_LOADERS_PNG AND PNG_INCLUDE_DIR)
+    target_include_directories(thorvg-${PROJECT_VERSION_MAJOR}
+        PRIVATE
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/${PNG_INCLUDE_DIR}>
     )
 endif()
 if (THORVG_LOADERS_JPG)
@@ -513,6 +642,15 @@ if (THORVG_STATIC)
     target_compile_definitions(thorvg-${PROJECT_VERSION_MAJOR} PRIVATE TVG_STATIC)
 else()
     target_compile_definitions(thorvg-${PROJECT_VERSION_MAJOR} PRIVATE TVG_EXPORT TVG_BUILD)
+endif()
+
+# Add GL engine compile definitions
+if (THORVG_ENGINES_GL)
+    if (THORVG_EXTRA_OPENGL_ES OR EMSCRIPTEN_BUILD)
+        target_compile_definitions(thorvg-${PROJECT_VERSION_MAJOR} PRIVATE THORVG_GL_TARGET_GLES=1)
+    else()
+        target_compile_definitions(thorvg-${PROJECT_VERSION_MAJOR} PRIVATE THORVG_GL_TARGET_GL=1)
+    endif()
 endif()
 
 target_compile_options(thorvg-${PROJECT_VERSION_MAJOR} PRIVATE ${COMPILER_FLAGS})
@@ -633,6 +771,16 @@ if (THORVG_TESTS)
     add_test(NAME UnitTests COMMAND tvgUnitTests --success)
 endif()
 
+# Determine OpenGL variant for summary (matching meson)
+set(GL_VARIANT "None")
+if (THORVG_ENGINES_GL)
+    if (EMSCRIPTEN_BUILD OR THORVG_EXTRA_OPENGL_ES)
+        set(GL_VARIANT "OpenGL ES")
+    else()
+        set(GL_VARIANT "OpenGL")
+    endif()
+endif()
+
 # Summary
 message(STATUS "ThorVG Configuration Summary:")
 message(STATUS "  Build Type: ${CMAKE_BUILD_TYPE}")
@@ -664,4 +812,4 @@ message(STATUS "  Lottie2Gif: ${THORVG_TOOLS_LOTTIE2GIF}")
 message(STATUS "Extra:")
 message(STATUS "  Lottie Expressions: ${THORVG_EXTRA_LOTTIE_EXP}")
 message(STATUS "  OpenMP: ${THORVG_EXTRA_OPENMP}")
-message(STATUS "  OpenGL Variant: ${THORVG_EXTRA_OPENGL_ES}")
+message(STATUS "  OpenGL Variant: ${GL_VARIANT}")

@@ -1,0 +1,7 @@
+/home/hieu/Workspaces/projects/thorvg/_build_test2/CMakeFiles/thorvg-1.dir
+/home/hieu/Workspaces/projects/thorvg/_build_test2/CMakeFiles/edit_cache.dir
+/home/hieu/Workspaces/projects/thorvg/_build_test2/CMakeFiles/rebuild_cache.dir
+/home/hieu/Workspaces/projects/thorvg/_build_test2/CMakeFiles/list_install_components.dir
+/home/hieu/Workspaces/projects/thorvg/_build_test2/CMakeFiles/install.dir
+/home/hieu/Workspaces/projects/thorvg/_build_test2/CMakeFiles/install/local.dir
+/home/hieu/Workspaces/projects/thorvg/_build_test2/CMakeFiles/install/strip.dir
