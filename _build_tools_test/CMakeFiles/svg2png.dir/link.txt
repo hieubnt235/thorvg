@@ -1,1 +1,0 @@
-/usr/bin/c++ -Wl,--dependency-file=CMakeFiles/svg2png.dir/link.d CMakeFiles/svg2png.dir/tools/svg2png/svg2png.cpp.o CMakeFiles/svg2png.dir/tools/svg2png/lodepng.cpp.o -o svg2png  libthorvg-1.a /usr/lib/x86_64-linux-gnu/libpthread.a
