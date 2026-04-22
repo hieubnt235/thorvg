@@ -319,6 +319,7 @@ if (THORVG_ENGINES_WG)
             src/renderer/gpu_engine/wg/tvgWgRenderTask.cpp
             src/renderer/gpu_engine/wg/tvgWgShaderSrc.cpp
             src/renderer/gpu_engine/wg/tvgWgShaderTypes.cpp
+            src/renderer/gpu_engine/wg/tvgWgTextureMgr.cpp
             src/renderer/gpu_engine/wg/tvgWgTessellator.cpp
     )
 endif ()
