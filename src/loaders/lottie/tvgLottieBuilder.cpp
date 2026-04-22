@@ -24,6 +24,7 @@
 #include "tvgCommon.h"
 #include "tvgMath.h"
 #include "tvgScene.h"
+#include "tvgText.h"
 #include "tvgLoader.h"
 #include "tvgLottieModel.h"
 #include "tvgLottieBuilder.h"
@@ -771,20 +772,20 @@ void LottieBuilder::updateRoundedCorner(TVG_UNUSED LottieGroup* parent, LottieOb
     auto roundedCorner = static_cast<LottieRoundedCorner*>(*child);
     auto r = roundedCorner->radius(frameNo, tween, exps);
     if (r < LottieRoundnessModifier::ROUNDNESS_EPSILON) return;
-    ctx->update(new LottieRoundnessModifier(&buffer, r));
+    ctx->update(new LottieRoundnessModifier(r));
 }
 
 
 void LottieBuilder::updateOffsetPath(TVG_UNUSED LottieGroup* parent, LottieObject** child, float frameNo, TVG_UNUSED Inlist<RenderContext>& contexts, RenderContext* ctx)
 {
     auto offset = static_cast<LottieOffsetPath*>(*child);
-    ctx->update(new LottieOffsetModifier(&buffer, offset->offset(frameNo, tween, exps), offset->miterLimit(frameNo, tween, exps), offset->join));
+    ctx->update(new LottieOffsetModifier(offset->offset(frameNo, tween, exps), offset->miterLimit(frameNo, tween, exps), offset->join));
 }
 
 void LottieBuilder::updatePuckerBloat(TVG_UNUSED LottieGroup* parent, LottieObject** child, float frameNo, TVG_UNUSED Inlist<RenderContext>& contexts, RenderContext* ctx)
 {
     auto puckerBloat = static_cast<LottiePuckerBloat*>(*child);
-    ctx->update(new LottiePuckerBloatModifier(&buffer, puckerBloat->amount(frameNo, tween, exps)));
+    ctx->update(new LottiePuckerBloatModifier(puckerBloat->amount(frameNo, tween, exps)));
 }
 
 void LottieBuilder::updateRepeater(TVG_UNUSED LottieGroup* parent, LottieObject** child, float frameNo, TVG_UNUSED Inlist<RenderContext>& contexts, RenderContext* ctx)
@@ -1015,17 +1016,26 @@ void LottieBuilder::updateURLFont(LottieLayer* layer, float frameNo, LottieText*
     paint->text(buf);
     paint->layout(doc.bbox.size.x, doc.bbox.size.y);
     paint->translate(doc.bbox.pos.x, doc.bbox.pos.y);
+    if (doc.bbox.size.x > 0.0f) paint->wrap(TextWrap::Word);
 
     //align the text to the base line
     TextMetrics metrics;
     paint->metrics(metrics);
     paint->align(doc.justify, metrics.ascent / (metrics.ascent - metrics.descent));
 
+    //apply spacing
+    auto hspacing = (doc.tracking > 0.0f) ? (1.0f + doc.tracking * doc.size / metrics.ascent) : 1.0f;
+    auto vspacing = (doc.height > 0.0f && paint->lines() > 1) ? (doc.height / metrics.advance) : 1.0f;
+    paint->spacing(hspacing, vspacing);
+
     layer->scene->add(paint);
 
     //outline
     auto strkColor = doc.stroke.color;
-    if (doc.stroke.width > 0.0f) paint->outline(doc.stroke.width, strkColor.r, strkColor.g, strkColor.b);
+    if (doc.stroke.width > 0.0f) {
+        paint->outline(doc.stroke.width, strkColor.r, strkColor.g, strkColor.b);
+        to<TextImpl>(paint)->shape->order(doc.stroke.below);
+    }
 
     tvg::free(buf);
 
@@ -1184,6 +1194,43 @@ static void _commit(LottieGlyph* glyph, Shape* shape, const RenderText& ctx)
     ctx.textScene->add(shape);
 }
 
+static LottieGlyph* _searchGlyph(const LottieFont* font, const char* p, const TextDocument& doc, float& capScale)
+{
+    capScale = 1.0f;
+    auto outCode = p;
+
+    // SmallCaps: lowercase letters are converted to uppercase with 70% scale
+    if ((unsigned char)*p < 0x80 && doc.caps) {
+        if (*p >= 'a' && *p <= 'z') {
+            char capCode = *p + 'A' - 'a';
+            outCode = &capCode;
+            if (doc.caps == 2) capScale = 0.7f;
+        }
+    }
+
+    // search for matching glyph in font
+    ARRAY_FOREACH(g, font->chars)
+    {
+        auto glyph = *g;
+        if (!strncmp(glyph->code, outCode, glyph->len)) return glyph;
+    }
+    return nullptr;
+}
+
+static float _nextWordWidth(const LottieText* text, const TextDocument& doc, const char* p)
+{
+    float w = 0.0f;
+    // accumulate width until space, carriage return (13), or end-of-text (3)
+    while (*p && *p != ' ' && (unsigned char)*p != 13 && (unsigned char)*p != 3) {
+        float capScale;
+        auto glyph = _searchGlyph(text->font, p, doc, capScale);
+        if (glyph) {
+            w += (glyph->width + doc.tracking) * capScale;
+            p += glyph->len;
+        } else ++p;
+    }
+    return w;
+}
 
 void LottieBuilder::updateLocalFont(LottieLayer* layer, float frameNo, LottieText* text, const TextDocument& doc)
 {
@@ -1229,8 +1276,14 @@ void LottieBuilder::updateLocalFont(LottieLayer* layer, float frameNo, LottieTex
             continue;
         }
         if (*ctx.p == ' ') {
+            // if next word overflows the box, break at this space
+            if (doc.bbox.size.x > 0.0f && (ctx.cursor.x + _nextWordWidth(text, doc, ctx.p + 1)) * ctx.scale >= doc.bbox.size.x) {
+                ++ctx.p;
+                lineWrapped = true;
+                continue;
+            }
             ++ctx.space;
-            //new text group, single scene for each word
+            // new text group, single scene for each word
             if (text->alignOp.group == LottieText::AlignOption::Group::Word) {
                 ctx.textScene->add(ctx.lineScene);
                 ctx.lineScene = Scene::gen();
@@ -1239,45 +1292,27 @@ void LottieBuilder::updateLocalFont(LottieLayer* layer, float frameNo, LottieTex
         }
         /* all lowercase letters are converted to uppercase in the "t" text field, making the "ca" value irrelevant, thus AllCaps is nothing to do.
            So only convert lowercase letters to uppercase (for 'SmallCaps' an extra scaling factor applied) */
-        ctx.capScale = 1.0f;
-        auto code = ctx.p;
-        char capCode;
-        if ((unsigned char)(ctx.p[0]) < 0x80 && doc.caps) {
-            if (*ctx.p >= 'a' && *ctx.p <= 'z') {
-                capCode = *ctx.p + 'A' - 'a';
-                code = &capCode;
-                if (doc.caps == 2) ctx.capScale = 0.7f;
+        auto glyph = _searchGlyph(text->font, ctx.p, doc, ctx.capScale);
+
+        // draw matched glyphs
+        if (glyph) {
+            if (text->alignOp.group == LottieText::AlignOption::Group::Chars || text->alignOp.group == LottieText::AlignOption::Group::All) {
+                ctx.textScene->add(ctx.lineScene);
+                ctx.lineScene = Scene::gen();
+                ctx.lineScene->translate(ctx.cursor.x, ctx.cursor.y);
             }
-        }
-        // text building
-        auto found = false;
-        ARRAY_FOREACH(g, text->font->chars) {
-            auto glyph = *g;
-            //draw matched glyphs
-            if (!strncmp(glyph->code, code, glyph->len)) {
-                //new text group, single scene for each characters
-                if (text->alignOp.group == LottieText::AlignOption::Group::Chars || text->alignOp.group == LottieText::AlignOption::Group::All) {
-                    ctx.textScene->add(ctx.lineScene);
-                    ctx.lineScene = Scene::gen();
-                    ctx.lineScene->translate(ctx.cursor.x, ctx.cursor.y);
-                }
-                auto shape = textShape(text, frameNo, doc, glyph, ctx);
-                if (!updateTextRange(text, frameNo, shape, doc, ctx)) _commit(glyph, shape, ctx);
-                if (doc.bbox.size.x > 0.0f && ctx.cursor.x * ctx.scale >= doc.bbox.size.x) lineWrapped = true;
-                else ctx.cursor.x += (glyph->width + doc.tracking) * ctx.capScale;
-                ctx.p += glyph->len;
-                ctx.idx += glyph->len;
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
+            auto shape = textShape(text, frameNo, doc, glyph, ctx);
+            if (!updateTextRange(text, frameNo, shape, doc, ctx)) _commit(glyph, shape, ctx);
+            if (doc.bbox.size.x > 0.0f && ctx.cursor.x * ctx.scale >= doc.bbox.size.x) lineWrapped = true;
+            else ctx.cursor.x += (glyph->width + doc.tracking) * ctx.capScale;
+            ctx.p += glyph->len;
+            ctx.idx += glyph->len;
+        } else {
             ++ctx.p;
             ++ctx.idx;
         }
     }
 }
-
 
 void LottieBuilder::updateText(LottieLayer* layer, float frameNo)
 {
@@ -1324,7 +1359,7 @@ void LottieBuilder::updateMasks(LottieLayer* layer, float frameNo)
             to<ShapeImpl>(pShape)->reset();
             auto compMethod = (method == MaskMethod::Subtract || method == MaskMethod::InvAlpha) ? MaskMethod::InvAlpha : MaskMethod::Alpha;
             //Cheaper. Replace the masking with a clipper
-            if (layer->effects.empty() && layer->masks.count == 1 && compMethod == MaskMethod::Alpha) {
+            if (!layer->effect && layer->masks.count == 1 && compMethod == MaskMethod::Alpha) {
                 layer->scene->opacity(MULTIPLY(layer->scene->opacity(), opacity));
                 layer->scene->clip(pShape);
             } else {
@@ -1347,7 +1382,7 @@ void LottieBuilder::updateMasks(LottieLayer* layer, float frameNo)
         //Masking with Expansion (Offset)
         } else {
             //TODO: Once path direction support is implemented, ensure that the direction is ignored here
-            auto offset = LottieOffsetModifier(&buffer, expand);
+            auto offset = LottieOffsetModifier(expand);
             mask->pathset(frameNo, to<ShapeImpl>(pShape)->rs.path, nullptr, tween, exps, &offset);
         }
         pOpacity = opacity;
@@ -1548,10 +1583,11 @@ static void _buildReference(LottieComposition* comp, LottieLayer* layer)
     ARRAY_FOREACH(p, comp->assets) {
         if (layer->rid != (*p)->id) continue;
         if (layer->type == LottieLayer::Precomp) {
-            auto assetLayer = static_cast<LottieLayer*>(*p);
-            if (_buildComposition(comp, assetLayer)) {
-                layer->children = assetLayer->children;
-                layer->reqFragment = assetLayer->reqFragment;
+            auto asset = static_cast<LottieLayer*>(*p);
+            if (_buildComposition(comp, asset)) {
+                layer->children = asset->children;
+                layer->reqFragment = asset->reqFragment;
+                layer->effect |= asset->effect;
             }
         } else if (layer->type == LottieLayer::Image) {
             layer->children.push(*p);

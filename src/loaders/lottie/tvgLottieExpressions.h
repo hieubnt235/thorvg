@@ -24,7 +24,7 @@
 #define _TVG_LOTTIE_EXPRESSIONS_H_
 
 #include "tvgCommon.h"
-#include "tvgLottieData.h"
+#include "tvgLottieCommon.h"
 
 struct LottieExpression;
 struct LottieComposition;
@@ -48,6 +48,20 @@ struct LottieExpressions
             out = (*prop)(frameNo);
         } else {
             out = (NumType) toFloat(bm_rt);
+        }
+        jerry_value_free(bm_rt);
+        return true;
+    }
+
+    template<typename Property>
+    bool result(float frameNo, uint8_t& out, LottieExpression* exp) {
+        auto bm_rt = evaluate(frameNo, exp);
+        if (jerry_value_is_undefined(bm_rt)) return false;
+
+        if (auto prop = static_cast<Property*>(jerry_object_get_native_ptr(bm_rt, nullptr))) {
+            out = (*prop)(frameNo);
+        } else {
+            out = (uint8_t)(toFloat(bm_rt) * 2.55f);
         }
         jerry_value_free(bm_rt);
         return true;

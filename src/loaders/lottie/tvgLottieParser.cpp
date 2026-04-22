@@ -190,36 +190,35 @@ bool LottieParser::getValue(PathSet& path)
     auto pt = pts.begin();
 
     //Store manipulated results
-    RenderPath temp;
+    RenderPath swap;
 
     //Reuse the buffers
-    temp.pts.data = path.pts;
-    temp.pts.reserved = path.ptsCnt;
-    temp.cmds.data = path.cmds;
-    temp.cmds.reserved = path.cmdsCnt;
+    swap.pts.data = path.pts;
+    swap.pts.reserved = path.ptsCnt;
+    swap.cmds.data = path.cmds;
+    swap.cmds.reserved = path.cmdsCnt;
 
     size_t extra = closed ? 3 : 0;
-    temp.pts.reserve(pts.count * 3 + 1 + extra);
-    temp.cmds.reserve(pts.count + 2);
+    swap.pts.reserve(pts.count * 3 + 1 + extra);
+    swap.cmds.reserve(pts.count + 2);
 
-    temp.moveTo(*pt);
+    swap.moveTo(*pt);
 
     for (++pt, ++out, ++in; pt < pts.end(); ++pt, ++out, ++in) {
-        temp.cubicTo(*(pt - 1) + *(out - 1), *pt + *in, *pt);
+        swap.cubicTo(*(pt - 1) + *(out - 1), *pt + *in, *pt);
     }
 
     if (closed) {
-        temp.cubicTo(pts.last() + outs.last(), pts.first() + ins.first(), pts.first());
-        temp.close();
+        swap.cubicTo(pts.last() + outs.last(), pts.first() + ins.first(), pts.first());
+        swap.close();
     }
 
-    path.pts = temp.pts.data;
-    path.cmds = temp.cmds.data;
-    path.ptsCnt = temp.pts.count;
-    path.cmdsCnt = temp.cmds.count;
+    path.pts = swap.pts.data;
+    path.cmds = swap.cmds.data;
+    path.ptsCnt = swap.pts.count;
+    path.cmdsCnt = swap.cmds.count;
 
-    temp.pts.data = nullptr;
-    temp.cmds.data = nullptr;
+    swap.dismiss();
 
     return false;
 }
@@ -1582,6 +1581,9 @@ LottieLayer* LottieParser::parseLayer(LottieLayer* precomp)
 
     layer->prepare(&color);
 
+    layer->effect = !layer->effects.empty();
+    precomp->effect |= layer->effect;
+
     return layer;
 }
 
@@ -1606,17 +1608,20 @@ LottieLayer* LottieParser::parseLayers(LottieLayer* root)
 void LottieParser::postProcess(Array<LottieGlyph*>& glyphs)
 {
     //aggregate font characters
-    for (uint32_t g = 0; g < glyphs.count; ++g) {
-        auto glyph = glyphs[g];
-        for (uint32_t i = 0; i < comp->fonts.count; ++i) {
-            auto& font = comp->fonts[i];
+    ARRAY_FOREACH(g, glyphs) {
+        auto glyph = *g;
+        ARRAY_FOREACH(f, comp->fonts) {
+            auto font = *f;
             if (!strcmp(font->family, glyph->family) && !strcmp(font->style, glyph->style)) {
                 font->chars.push(glyph);
-                tvg::free(glyph->family);
-                tvg::free(glyph->style);
+                free(glyph->family);
+                free(glyph->style);
+                glyph->family = glyph->style = nullptr;
+                glyph = nullptr;
                 break;
             }
         }
+        delete(glyph);
     }
 }
 

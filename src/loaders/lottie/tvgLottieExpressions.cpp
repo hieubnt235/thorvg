@@ -61,6 +61,42 @@ static const char* EXP_VALUE = "value";
 static const char* EXP_INDEX = "index";
 static const char* EXP_EFFECT= "effect";
 
+/**
+ * external magic strings for the per-frame hot path (buildProperty, buildLayer, buildTransform, bm_rt).
+ * magic pool: sorted by length, then lexicographically. packed in a single static blob,
+ *             because 'jerry_register_magic_strings' does not copy the string data.
+ * lengths/count are generated from a single list at compile time; pointers are built once at init.
+ */
+#define TVG_LOTTIE_MAGIC_STRING_LIST(X) \
+    X("key") \
+    X("comp") X("name") X("time") \
+    X("index") X("layer") X("scale") X("speed") X("value") X("width") \
+    X("$bm_rt") X("effect") X("height") X("parent") X("toComp") X("wiggle") \
+    X("content") X("enabled") X("inPoint") X("numKeys") X("opacity") \
+    X("duration") X("hasAudio") X("hasVideo") X("outPoint") X("position") X("rotation") X("thisComp") X("velocity") \
+    X("hasParent") X("numLayers") X("startTime") X("thisLayer") X("timeRemap") X("transform") \
+    X("nearestKey") \
+    X("anchorPoint") X("audioActive") X("speedAtTime") X("valueAtTime") \
+    X("thisProperty") \
+    X("frameDuration") X("propertyIndex") \
+    X("velocityAtTime")
+
+#define TVG_LOTTIE_MAGIC_POOL_ENTRY(str) str
+static constexpr const char _magicPool[] =
+    TVG_LOTTIE_MAGIC_STRING_LIST(TVG_LOTTIE_MAGIC_POOL_ENTRY);
+#undef TVG_LOTTIE_MAGIC_POOL_ENTRY
+
+#define TVG_LOTTIE_MAGIC_LENGTH_ENTRY(str) (jerry_length_t)(sizeof(str) - 1),
+static constexpr jerry_length_t _magicLengths[] = {
+    TVG_LOTTIE_MAGIC_STRING_LIST(TVG_LOTTIE_MAGIC_LENGTH_ENTRY)
+};
+#undef TVG_LOTTIE_MAGIC_LENGTH_ENTRY
+
+#define MAGIC_STRING_COUNT (sizeof(_magicLengths) / sizeof(_magicLengths[0]))
+static const jerry_char_t* _magicStrings[MAGIC_STRING_COUNT];
+
+#undef TVG_LOTTIE_MAGIC_STRING_LIST
+
 static LottieExpressions* exps = nullptr;   //singleton instance engine
 
 
@@ -703,7 +739,7 @@ static jerry_value_t _pointOnPath(const jerry_call_info_t* info, const jerry_val
     auto data = static_cast<ExpContent*>(jerry_object_get_native_ptr(info->function, &freeCb));
     auto pathset = static_cast<LottiePathSet*>(data->property);
     auto progress = _number(args[0]);
-    RenderPath out;
+    auto& out = RenderPath::scratch();
     (*pathset)(data->frameNo, out, nullptr, nullptr);
     return _point2d(out.point(progress));
 }
@@ -713,7 +749,7 @@ static jerry_value_t _tangentOnPath(const jerry_call_info_t* info, const jerry_v
     auto data = static_cast<ExpContent*>(jerry_object_get_native_ptr(info->function, &freeCb));
     auto pathset = static_cast<LottiePathSet*>(data->property);
     auto progress = _number(args[0]);
-    RenderPath out;
+    auto& out = RenderPath::scratch();
     (*pathset)(data->frameNo, out, nullptr, nullptr);
 
     auto a = out.point(std::max(0.0f, progress - 0.001f));
@@ -1486,6 +1522,15 @@ LottieExpressions::~LottieExpressions()
 LottieExpressions::LottieExpressions()
 {
     jerry_init(JERRY_INIT_EMPTY);
+
+    //build magic string arrays from the magic pool
+    auto p = _magicPool;
+    for (uint32_t i = 0; i < MAGIC_STRING_COUNT; ++i) {
+        _magicStrings[i] = (const jerry_char_t*)p;
+        p += _magicLengths[i];
+    }
+    jerry_register_magic_strings(_magicStrings, MAGIC_STRING_COUNT, _magicLengths);
+
     _buildMath(buildGlobal());
 }
 
