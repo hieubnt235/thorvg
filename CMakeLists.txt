@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 4.0)
 project(thorvg VERSION 1.0.0 LANGUAGES CXX)
 
 set(THORVG_VERSION_STRING "${PROJECT_VERSION}")
